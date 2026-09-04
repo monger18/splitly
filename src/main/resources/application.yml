@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: splitly
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/splitly
+    username: splitly
+    password: splitly
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema. Hibernate only checks that the entities match it.
+      # Never use ddl-auto: update in a real project - it silently drifts.
+      ddl-auto: validate
+    # Closes the persistence context at the end of the service call, not the HTTP
+    # response. Forces you to fetch what you need up front instead of relying on
+    # lazy loading in the controller. Boot warns if you leave this on the default.
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    # Shows the SQL Hibernate actually runs - the fastest way to spot N+1 queries.
+    org.hibernate.SQL: debug
