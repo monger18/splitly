@@ -24,6 +24,17 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  devtools:
+    restart:
+      # Watches target/classes and restarts the application context when the
+      # compiled classes change. It reloads only your classes, not the whole JVM,
+      # so a restart is roughly a second instead of the full seven.
+      # It is triggered by RECOMPILING, not by saving a .java file - see CLAUDE.md.
+      enabled: true
+    livereload:
+      # Browser refresh hook. There is no front end in this project.
+      enabled: false
+
 server:
   port: 8080
 
