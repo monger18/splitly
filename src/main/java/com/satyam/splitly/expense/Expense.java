@@ -95,12 +95,35 @@ public class Expense extends AuditableEntity {
     }
 
     /**
-     * Replaces the whole set of shares, keeping both sides of the association in
-     * step. Callers must never mutate the list returned by {@link #getShares()};
-     * with orphanRemoval on, a stale collection means deleted rows.
+     * Sets the shares on a brand new expense.
+     *
+     * <p>Only safe when there are no existing share rows. To change the shares of an
+     * expense that is already stored, use {@link #clearShares()}, flush, then
+     * {@link #addShares} - see the note on {@code clearShares}.
      */
     public void replaceShares(List<ExpenseShare> newShares) {
         this.shares.clear();
+        addShares(newShares);
+    }
+
+    /**
+     * Detaches every current share, marking the rows for deletion via orphanRemoval.
+     *
+     * <p><strong>The caller must flush before adding replacements.</strong> Hibernate
+     * orders the statements in a flush by operation type, not by the order the changes
+     * were made, and inserts run before deletes. Clearing and refilling in one flush
+     * therefore tries to insert a row for a user who is still present in the old set,
+     * and the unique index on (expense_id, user_id) rejects it.
+     *
+     * <p>That index is worth keeping - it is what stops one person being charged twice
+     * for the same expense - so the flush is the right fix rather than dropping it.
+     */
+    public void clearShares() {
+        this.shares.clear();
+    }
+
+    /** Adds shares, keeping both sides of the association in step. */
+    public void addShares(List<ExpenseShare> newShares) {
         newShares.forEach(share -> {
             share.setExpense(this);
             this.shares.add(share);

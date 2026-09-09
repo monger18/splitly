@@ -2,6 +2,7 @@ package com.satyam.splitly.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import tools.jackson.databind.exc.InvalidFormatException;
 
 /**
  * Turns exceptions into the one {@link ErrorResponse} shape, for every controller
@@ -86,7 +88,47 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex,
                                                               HttpServletRequest request) {
         log.debug("Unreadable request body on {} {}", request.getMethod(), request.getRequestURI(), ex);
+
+        // A value that cannot be converted - most often a typo in an enum - arrives here
+        // rather than as a validation failure, because binding fails before Bean
+        // Validation ever runs. Reporting it as "not valid JSON" would be wrong and
+        // unhelpful: the JSON parsed fine, one field just did not fit its type.
+        if (ex.getCause() instanceof InvalidFormatException cause) {
+            String field = fieldPath(cause);
+            String detail = cause.getTargetType() != null && cause.getTargetType().isEnum()
+                    ? "must be one of " + Arrays.toString(cause.getTargetType().getEnumConstants())
+                    : "must be a valid " + simpleTypeName(cause);
+
+            return ResponseEntity.badRequest().body(new ErrorResponse(
+                    Instant.now(),
+                    HttpStatus.BAD_REQUEST.value(),
+                    HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                    "Request validation failed",
+                    request.getRequestURI(),
+                    List.of(new ErrorResponse.FieldError(field,
+                            "'%s' is not accepted here; %s".formatted(cause.getValue(), detail)))));
+        }
         return build(HttpStatus.BAD_REQUEST, "Request body is missing or not valid JSON", request);
+    }
+
+    /** Rebuilds the dotted path Jackson walked, so the client is told which field failed. */
+    private String fieldPath(InvalidFormatException cause) {
+        StringBuilder path = new StringBuilder();
+        cause.getPath().forEach(reference -> {
+            if (reference.getPropertyName() != null) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(reference.getPropertyName());
+            } else if (reference.getIndex() >= 0) {
+                path.append('[').append(reference.getIndex()).append(']');
+            }
+        });
+        return path.isEmpty() ? "body" : path.toString();
+    }
+
+    private String simpleTypeName(InvalidFormatException cause) {
+        return cause.getTargetType() == null ? "value" : cause.getTargetType().getSimpleName();
     }
 
     /** A path variable or query parameter is the wrong type - /groups/abc where a number belongs. */
