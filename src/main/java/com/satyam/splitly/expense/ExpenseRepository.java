@@ -1,5 +1,8 @@
 package com.satyam.splitly.expense;
 
+import com.satyam.splitly.balance.GroupAmount;
+import com.satyam.splitly.balance.UserAmount;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +35,23 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     /** Every read filters out soft-deleted rows; only the audit trail sees them. */
     Optional<Expense> findByIdAndDeletedAtIsNull(Long id);
+
+    /** Total actually paid out by each member of a group. */
+    @Query("""
+            select new com.satyam.splitly.balance.UserAmount(e.paidBy.id, sum(e.amount))
+            from Expense e
+            where e.group.id = :groupId and e.deletedAt is null
+            group by e.paidBy.id
+            """)
+    List<UserAmount> sumPaidByUser(Long groupId);
+
+    @Query("""
+            select new com.satyam.splitly.balance.GroupAmount(e.group.id, sum(e.amount))
+            from Expense e
+            where e.paidBy.id = :userId and e.deletedAt is null
+            group by e.group.id
+            """)
+    List<GroupAmount> sumPaidByGroupForUser(Long userId);
 
     @Query("""
             select e from Expense e
