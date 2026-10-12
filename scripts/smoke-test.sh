@@ -1,56 +1,58 @@
 set -u
-API=http://localhost:8080/api/v1
+cd "$(dirname "$0")/.." || exit 1
+. scripts/lib.sh
 S=$RANDOM
-jqid() { python3 -c "import sys,json;print(json.load(sys.stdin)['id'])"; }
-line() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
-line "1. Register three users"
-A=$(curl -s -X POST $API/users -H 'Content-Type: application/json' -d "{\"name\":\"Alice\",\"email\":\"alice$S@ex.com\"}" | jqid)
-B=$(curl -s -X POST $API/users -H 'Content-Type: application/json' -d "{\"name\":\"Bob\",\"email\":\"bob$S@ex.com\"}"     | jqid)
-C=$(curl -s -X POST $API/users -H 'Content-Type: application/json' -d "{\"name\":\"Carol\",\"email\":\"carol$S@ex.com\"}" | jqid)
-D=$(curl -s -X POST $API/users -H 'Content-Type: application/json' -d "{\"name\":\"Dan\",\"email\":\"dan$S@ex.com\"}"     | jqid)
-echo "alice=$A bob=$B carol=$C dan=$D (dan stays outside the group)"
+line "Register four users (Dan stays outside the group)"
+read A TA < <(register Alice "alice$S@ex.com")
+read B TB < <(register Bob   "bob$S@ex.com")
+read C TC < <(register Carol "carol$S@ex.com")
+read D TD < <(register Dan   "dan$S@ex.com")
+echo "alice=$A bob=$B carol=$C dan=$D"
 
-line "2. GET /users/me as Alice"
-curl -s $API/users/me -H "X-User-Id: $A"; echo
+line "GET /users/me as Alice"
+curl -s $API/users/me -H "$(authh "$TA")"; echo
 
-line "3. Duplicate email -> expect 409"
-curl -s -w " [%{http_code}]\n" -X POST $API/users -H 'Content-Type: application/json' -d "{\"name\":\"Alice again\",\"email\":\"alice$S@ex.com\"}"
+line "Search users by email fragment"
+curl -s "$API/users/search?email=bob$S" -H "$(authh "$TA")"; echo
 
-line "4. Validation: blank name + bad email -> expect 400 with fieldErrors"
-curl -s -w " [%{http_code}]\n" -X POST $API/users -H 'Content-Type: application/json' -d '{"name":"","email":"nope"}'
-
-line "5. Missing X-User-Id -> expect 401"
-curl -s -w " [%{http_code}]\n" $API/users/me
-
-line "6. Alice creates a group"
-G=$(curl -s -X POST $API/groups -H "X-User-Id: $A" -H 'Content-Type: application/json' -d '{"name":"Goa Trip","currency":"INR"}' | jqid)
+line "Alice creates a group"
+G=$(curl -s -X POST $API/groups -H "$(authh "$TA")" -H 'Content-Type: application/json' \
+  -d '{"name":"Goa Trip","currency":"INR"}' | jget id)
 echo "group=$G"
 
-line "7. Alice adds Bob and Carol"
-curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "X-User-Id: $A" -H 'Content-Type: application/json' -d "{\"userId\":$B}"
-curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "X-User-Id: $A" -H 'Content-Type: application/json' -d "{\"userId\":$C}"
+line "Alice adds Bob and Carol -> expect 201 each"
+for U in $B $C; do
+  curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "$(authh "$TA")" \
+    -H 'Content-Type: application/json' -d "{\"userId\":$U}"
+done
 
-line "8. Adding Bob twice -> expect 409"
-curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "X-User-Id: $A" -H 'Content-Type: application/json' -d "{\"userId\":$B}"
+line "Adding Bob twice -> expect 409"
+curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "$(authh "$TA")" \
+  -H 'Content-Type: application/json' -d "{\"userId\":$B}"
 
-line "9. Group detail as Bob (a member)"
-curl -s $API/groups/$G -H "X-User-Id: $B" | python3 -m json.tool
+line "Group detail as Bob (a member) -> expect 200"
+curl -s $API/groups/$G -H "$(authh "$TB")" | pp
 
-line "10. Dan is NOT a member -> expect 403"
-curl -s -w " [%{http_code}]\n" $API/groups/$G -H "X-User-Id: $D"
+line "Dan is not a member -> expect 403"
+curl -s -w " [%{http_code}]\n" $API/groups/$G -H "$(authh "$TD")"
 
-line "11. Bob (a plain MEMBER) tries to add Dan -> expect 403"
-curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "X-User-Id: $B" -H 'Content-Type: application/json' -d "{\"userId\":$D}"
+line "Bob (plain MEMBER) tries to add Dan -> expect 403 from @PreAuthorize"
+curl -s -w " [%{http_code}]\n" -X POST $API/groups/$G/members -H "$(authh "$TB")" \
+  -H 'Content-Type: application/json' -d "{\"userId\":$D}"
 
-line "12. Alice (sole ADMIN) tries to leave -> expect 400"
-curl -s -w " [%{http_code}]\n" -X DELETE $API/groups/$G/members/$A -H "X-User-Id: $A"
+line "Alice (sole ADMIN) tries to leave -> expect 400"
+curl -s -w " [%{http_code}]\n" -X DELETE $API/groups/$G/members/$A -H "$(authh "$TA")"
 
-line "13. Carol leaves on her own -> expect 204"
-curl -s -o /dev/null -w "[%{http_code}]\n" -X DELETE $API/groups/$G/members/$C -H "X-User-Id: $C"
+line "Carol leaves on her own -> expect 204"
+curl -s -o /dev/null -w "[%{http_code}]\n" -X DELETE $API/groups/$G/members/$C -H "$(authh "$TC")"
 
-line "14. Alice lists her groups (memberCount should now be 2)"
-curl -s $API/groups -H "X-User-Id: $A" | python3 -m json.tool
+line "Alice lists her groups (memberCount should be 2)"
+curl -s $API/groups -H "$(authh "$TA")" | pp
 
-line "15. Unknown user id in header -> expect 401"
-curl -s -w " [%{http_code}]\n" $API/users/me -H "X-User-Id: 99999999"
+line "Validation: blank group name -> expect 400 with fieldErrors"
+curl -s -w " [%{http_code}]\n" -X POST $API/groups -H "$(authh "$TA")" \
+  -H 'Content-Type: application/json' -d '{"name":"","currency":"inr"}'
+
+line "No token at all -> expect 401"
+curl -s -w " [%{http_code}]\n" $API/groups

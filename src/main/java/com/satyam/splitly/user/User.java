@@ -7,13 +7,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * A person who can belong to groups and take part in expenses.
- *
- * <p>{@code passwordHash} is nullable for now - registration with a real
- * password arrives with Spring Security in phase 2. It is never exposed through
- * a DTO.
- */
+
 @Entity
 @Table(name = "users")
 @Getter

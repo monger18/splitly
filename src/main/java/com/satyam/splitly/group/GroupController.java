@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,7 +59,13 @@ public class GroupController {
                 groupService.listMembers(groupId, userId));
     }
 
+    /**
+     * Evaluated before the method runs, so a non-admin never reaches the service.
+     * {@code #groupId} refers to the parameter by name, which works because
+     * spring-boot-starter-parent compiles with -parameters.
+     */
     @PostMapping("/{groupId}/members")
+    @PreAuthorize("@groupAccess.isAdmin(#groupId)")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Add a member", description = "Admins only.")
     public GroupMemberResponse addMember(@CurrentUserId Long userId,

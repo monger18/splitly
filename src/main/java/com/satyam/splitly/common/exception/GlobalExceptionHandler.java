@@ -7,6 +7,8 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -150,6 +152,30 @@ public class GlobalExceptionHandler {
                                                              HttpServletRequest request) {
         log.warn("Constraint violation on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.CONFLICT, "That change conflicts with existing data", request);
+    }
+
+    /**
+     * Raised by {@code @PreAuthorize} when a rule rejects the caller.
+     *
+     * <p>This handler is easy to miss and its absence is not obvious. Spring Security has
+     * its own {@link com.satyam.splitly.auth.RestAccessDeniedHandler}, but that only sees
+     * exceptions that reach the filter chain. Method security throws from an AOP proxy
+     * around the controller, which is inside the dispatcher servlet - so the exception
+     * unwinds to this advice instead, and without an entry here the catch-all below turns
+     * every {@code @PreAuthorize} denial into a 500. Both handlers are needed: this one for
+     * method security, that one for the URL rules.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex,
+                                                            HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, "You are not allowed to do that", request);
+    }
+
+    /** The same problem for authentication failures surfacing inside the dispatcher. */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex,
+                                                              HttpServletRequest request) {
+        return build(HttpStatus.UNAUTHORIZED, "Authentication required", request);
     }
 
     /**

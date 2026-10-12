@@ -13,10 +13,9 @@ import java.lang.annotation.Target;
  * </pre>
  *
  * <p>This annotation is the seam that keeps authentication out of every controller.
- * Right now {@link CurrentUserIdArgumentResolver} reads the id from an
- * {@code X-User-Id} header, which is a stand-in with no security whatsoever - any
- * caller can claim to be any user. In phase 4 that resolver starts reading the
- * authenticated principal from the JWT instead, and not one controller changes.
+ * {@link CurrentUserIdArgumentResolver} supplies the value from the verified subject of
+ * the request's JWT. It previously read an {@code X-User-Id} header instead; swapping to
+ * real authentication changed that one resolver and nothing else.
  */
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)

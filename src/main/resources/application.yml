@@ -35,6 +35,15 @@ spring:
       # Browser refresh hook. There is no front end in this project.
       enabled: false
 
+splitly:
+  jwt:
+    secret: ${SPLITLY_JWT_SECRET:local-development-only-splitly-signing-key-change-me}
+    issuer: splitly
+    # Short-lived, because a stolen access token cannot be revoked - it simply has to
+    # expire. The refresh token is long-lived but is only ever sent to /auth/refresh.
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+
 server:
   port: 8080
 
