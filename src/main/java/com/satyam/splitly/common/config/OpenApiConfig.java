@@ -8,21 +8,12 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Describes the API for springdoc, which reads the controllers at startup and serves
- * generated docs at /swagger-ui.html - a browsable client you can send real requests from,
- * without writing a front end.
- */
 @Configuration
 public class OpenApiConfig {
 
     private static final String BEARER = "bearerAuth";
 
-    /**
-     * Declaring the bearer scheme puts an Authorize button in Swagger UI: paste an access
-     * token once and every request carries it. Without it, trying a protected endpoint from
-     * the browser means hand-crafting the Authorization header on each call.
-     */
+
     @Bean
     public OpenAPI splitlyOpenApi() {
         return new OpenAPI()

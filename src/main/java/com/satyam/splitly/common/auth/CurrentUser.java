@@ -6,13 +6,6 @@ import java.util.Optional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/**
- * Reads the calling user out of Spring Security's context.
- *
- * <p>The single place that touches {@code SecurityContextHolder}. Keeping it here means
- * services and controllers never reach into thread-local security state, and the day
- * authentication changes shape there is one method to rewrite.
- */
 public final class CurrentUser {
 
     private CurrentUser() {

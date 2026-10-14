@@ -20,20 +20,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import tools.jackson.databind.exc.InvalidFormatException;
 
-/**
- * Turns exceptions into the one {@link ErrorResponse} shape, for every controller
- * at once.
- *
- * <p>This is why no controller in this project contains a try/catch. A service
- * throws {@link NotFoundException}, the throw unwinds to here, and this class
- * decides the status code and body. Controllers stay about the happy path.
- *
- * <p>Order matters: Spring picks the handler whose parameter type is the closest
- * match, so the specific handlers below always win over the {@code Exception}
- * catch-all at the bottom. Anything Spring MVC itself throws needs a handler here,
- * or the catch-all reports it as a 500 - which is how an unmatched URL ends up
- * looking like a server crash.
- */
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -45,11 +32,7 @@ public class GlobalExceptionHandler {
         return build(ex.getStatus(), ex.getMessage(), request);
     }
 
-    /**
-     * Raised when a {@code @Valid @RequestBody} fails its Bean Validation
-     * annotations. Every broken field is reported at once so the client does not
-     * have to fix them one request at a time.
-     */
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex,
                                                           HttpServletRequest request) {
@@ -81,20 +64,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.METHOD_NOT_ALLOWED, ex.getMessage(), request);
     }
 
-    /**
-     * The body is not readable at all - malformed JSON, or a value that cannot be
-     * coerced into the target type. The raw message names Java classes and parser
-     * internals, so it is not passed through to the caller.
-     */
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex,
                                                               HttpServletRequest request) {
         log.debug("Unreadable request body on {} {}", request.getMethod(), request.getRequestURI(), ex);
 
-        // A value that cannot be converted - most often a typo in an enum - arrives here
-        // rather than as a validation failure, because binding fails before Bean
-        // Validation ever runs. Reporting it as "not valid JSON" would be wrong and
-        // unhelpful: the JSON parsed fine, one field just did not fit its type.
         if (ex.getCause() instanceof InvalidFormatException cause) {
             String field = fieldPath(cause);
             String detail = cause.getTargetType() != null && cause.getTargetType().isEnum()
@@ -141,12 +116,7 @@ public class GlobalExceptionHandler {
                 "Parameter '%s' has an invalid value: %s".formatted(ex.getName(), ex.getValue()), request);
     }
 
-    /**
-     * A database constraint rejected the write - a duplicate email, or the same user
-     * added to a group twice. Those constraints are the real guard, because two
-     * concurrent requests can both pass an application-level check, so this handler
-     * is what turns the race into a clean 409 rather than a 500.
-     */
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
                                                              HttpServletRequest request) {
@@ -154,17 +124,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "That change conflicts with existing data", request);
     }
 
-    /**
-     * Raised by {@code @PreAuthorize} when a rule rejects the caller.
-     *
-     * <p>This handler is easy to miss and its absence is not obvious. Spring Security has
-     * its own {@link com.satyam.splitly.auth.RestAccessDeniedHandler}, but that only sees
-     * exceptions that reach the filter chain. Method security throws from an AOP proxy
-     * around the controller, which is inside the dispatcher servlet - so the exception
-     * unwinds to this advice instead, and without an entry here the catch-all below turns
-     * every {@code @PreAuthorize} denial into a 500. Both handlers are needed: this one for
-     * method security, that one for the URL rules.
-     */
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex,
                                                             HttpServletRequest request) {
@@ -178,10 +138,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, "Authentication required", request);
     }
 
-    /**
-     * The catch-all. It logs the real stack trace and returns a generic message,
-     * because exception text can leak table names, SQL, and file paths to callers.
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);

@@ -2,7 +2,7 @@ package com.satyam.splitly.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** 404. The row does not exist, or the caller may not know that it does. */
+//404. The row does not exist, or the caller may not know that it does.
 public class NotFoundException extends ApiException {
 
     public NotFoundException(String message) {
